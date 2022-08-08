@@ -5,6 +5,7 @@
 #Peng, Week 4 - Clustering Case Study video
 #topics: hierarchical clustering, singular value decomposition, k-means clustering
 
+
 #using training data set
 
 library(tidyverse)
