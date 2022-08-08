@@ -49,26 +49,26 @@ activity %>%
   count(victim_activity, sort = TRUE)
 
 
-#change in frequencies over time?
-
+#change in proportions over time?
+#fatal vs injured vs uninjured victim
 activity %>% 
   filter(incident_year>=1900) %>% 
-  count(incident_year, recovery_status) %>% 
-  complete(incident_year, recovery_status, fill=list(n=0)) %>% 
+  count(incident_decade = (incident_year%/%10)*10, recovery_status) %>% 
+  complete(incident_decade, recovery_status, fill=list(n=0)) %>% 
   mutate(recovery_status=fct_reorder(recovery_status, n, sum)) %>% 
-  ggplot(aes(incident_year, n, fill = recovery_status)) +
+  ggplot(aes(incident_decade, n, fill = recovery_status)) +
   geom_area(position="fill") +
   scale_y_continuous(labels = percent)
 
-
+#activity: diving, spearfishing, snorkelling, boarding, swimming
 activity %>% 
   filter(incident_year>=1900,
          !is.na(victim_activity),
          fct_lump(victim_activity, 5) != "Other") %>% 
-  count(incident_year, victim_activity) %>% 
-  complete(incident_year, victim_activity, fill=list(n=0)) %>% 
+  count(incident_decade = (incident_year%/%10)*10, victim_activity) %>% 
+  complete(incident_decade, victim_activity, fill=list(n=0)) %>% 
   mutate(victim_activity=fct_reorder(victim_activity, n, sum)) %>% 
-  ggplot(aes(incident_year, n, fill = victim_activity)) +
+  ggplot(aes(incident_decade, n, fill = victim_activity)) +
   geom_area(position="fill") +
   scale_y_continuous(labels = percent)
 
@@ -84,6 +84,7 @@ injuries %>% map_df(~sum(is.na(.)))
 library(gganimate)
 
 injuries %>% 
+  filter(!is.na(victim_injury)) %>% 
   ggplot(aes(longitude, latitude, colour = victim_injury)) +
   geom_point(alpha=.3) +
   borders("world", regions="australia") +
@@ -122,7 +123,7 @@ injuries %>%
 
 #what's the longest sharks?
 injuries %>% 
-  top_n(10, shark_length_m) %>% View
+  top_n(10, shark_length_m)
 
 
 #are longer sharks more fatal?
@@ -150,7 +151,8 @@ injuries %>%
   filter(n > 10) %>% 
   mutate(shark_common_name = fct_reorder(shark_common_name, shark_length_m, na.rm=TRUE)) %>% 
   ggplot(aes(shark_length_m, shark_common_name)) +
-  geom_density_ridges()
+  geom_density_ridges() +
+  labs(y="")
 #note the multiple modes at whole number intervals
 
 #are certain sharks more deadly, controlling for size?
@@ -232,4 +234,6 @@ injuries %>%
   count(no_sharks, sort = TRUE)
 #1 incident involved 10 sharks, yikes!
 injuries %>% 
-  filter(no_sharks == 10) %>% View
+  filter(no_sharks == 10)
+
+
