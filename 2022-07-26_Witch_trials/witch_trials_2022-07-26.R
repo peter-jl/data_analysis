@@ -209,7 +209,7 @@ witch_trials %>%
 
 
 witch_trials %>% 
-  filter(region=="Scotland") %>%witch_trials %>% 
+  filter(region=="Scotland") %>% 
   mutate(decade_trunc = decade - century) %>% 
   count(century, decade_trunc) %>% 
   ggplot(aes(century, decade_trunc, fill = n)) +
@@ -248,8 +248,8 @@ witch_trials %>%
   arrange(desc(trials))
 
 witch_trials %>% 
-  filter(fct_lump(gadm.adm0, 9)!="Other") %>% 
-  group_by(country = gadm.adm0, decade) %>% 
+  filter(fct_lump(country, 9)!="Other") %>% 
+  group_by(country, decade) %>% 
   summarise(num_trials = n(),
             tot_tried = sum(tried, na.rm = TRUE),
             tot_deaths = sum(deaths, na.rm = TRUE)) %>% 
