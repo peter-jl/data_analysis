@@ -6,7 +6,7 @@
 #topics: hierarchical clustering, singular value decomposition, k-means clustering
 
 
-#using training data set
+#using training data set, only need the training set data from the zip folder
 
 library(tidyverse)
 theme_set(theme_light())
