@@ -1,0 +1,89 @@
+
+library(tidyverse)
+theme_set(theme_light())
+
+
+golf_data <- tribble(~course, ~par_pro, ~par_amateur, ~PJ, ~Chi, ~PL,
+        "The Trap", 2, 3, 3, 3, 2,
+        "A-hole", 2 ,3, 2, 3, 4,
+        "Mr. Flexible", 2, 3, 4, 6, 6,
+        "Thea", 2, 3, 3, 4, 3,
+        "The Corner Shot", 3, 4, 6, 4, 6,
+        "The Pro Shot", 2, 3, 3, 6, 2,
+        "The Heartbeat", 1, 2, 2, 2, 2,
+        "The Big Z", 2, 3, 3, 3, 2,
+        "Rise 'n Shine", 3, 5, 3, 4, 6,
+        "Tee Shot", 2, 3, 4, 2, 1,
+        "Over/Under", 2, 3, 3, 6, 4,
+        "Sweet Tap", 2, 3, 2, 3, 3,
+        "Ice Ice Baby", 2, 3, 3, 6, 4,
+        "Nicky's Mistake", 2, 3, 3, 2, 4,
+        "U-Turn", 2, 2, 3, 6, 3,
+        "Pink Box", 3, 5, 6, 6, 6,
+        "Snake Bite", 3, 4, 3, 3, 2,
+        "Glory Hole", 1, 2, 1, 1, 1) %>% 
+  mutate(course_num = row_number(), .before = course) %>% 
+  unite("course", course_num, course, sep = " - ") %>% 
+  mutate(course = fct_inorder(course))
+
+#winner
+golf_data %>% 
+  summarise(across(PJ:PL, sum))
+
+golf_long <- golf_data %>% 
+  pivot_longer(-course, names_to = "golfer", values_to = "score") %>% 
+  group_by(golfer) %>% 
+  mutate(cumscore = cumsum(score)) %>% 
+  ungroup() %>% 
+  mutate(golfer_cat = case_when(golfer %in% c("par_amateur", "par_pro")~"par",
+                                TRUE~"person")) %>% 
+  group_by(course, golfer_cat) %>% 
+  mutate(round_rank = ifelse(golfer_cat == "person", rank(score, ties.method = "min"), NA_real_)) %>% 
+  ungroup()
+  
+by_round <- golf_long %>% 
+  filter(golfer_cat!="par") %>% 
+  unite("golfer_score", golfer, score, sep = ":", remove = FALSE) %>% 
+  group_by(course) %>% 
+  summarize(round_winner = ifelse(sum(round_rank==1)==1, golfer[which.min(round_rank)], NA_character_),
+            round_order = str_c("round: ", str_c(golfer[order(round_rank)], collapse=" - ")),
+            round_scores = str_c(golfer_score[order(round_rank)], collapse=" - "),
+            leader = golfer[which.min(cumscore)],
+            max_score = max(cumscore))
+
+golf_long %>% 
+  #filter(golfer_cat=="person") %>% 
+  mutate(course = fct_rev(course),
+         golfer = case_when(golfer=="par_pro"~"Par - Pro",
+                            golfer=="par_amateur"~"Par - Amateur",
+                            TRUE~golfer),
+         golfer_cat=str_to_title(golfer_cat)) %>% 
+  ggplot(aes(cumscore, course, colour = golfer, group = golfer)) +
+  geom_step(direction = "vh", aes(linetype = golfer_cat),
+            position=position_dodge(width=.12), show.legend=TRUE) +
+  geom_point() +
+  geom_text(aes(label = round_scores, colour = round_winner, 
+                x=max_score + 10, y = course), data = by_round, 
+            inherit.aes = FALSE, show.legend = FALSE) +
+  expand_limits(x = 90) +
+  guides(colour = guide_legend(override.aes = list(linetype = c(2,2,1,1,1)))) +
+  scale_x_continuous(breaks=seq(0,70,10)) +
+  scale_linetype_manual(guide = "none", values = c("Par" = 2, 
+                                                   "Person" = 1)) + 
+  scale_colour_manual(values = c("Par - Pro" = gray(.70), 
+                                 "Par - Amateur" = gray(.85),
+                                 "PJ" = "deeppink",
+                                 "PL" = "green3",
+                                 "Chi" = "orange")) +
+  labs(x = "Cumulative score\n(lower is better)",
+       y = "",
+       colour = "",
+       linetype= "",
+       title = "West Coast Mini-Putt",
+       subtitle = "A competition for the ages!") +
+  theme_light(base_size = 14) +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major = element_line(colour=gray(.96)),
+        legend.position = c(.8,.8))
+
+
