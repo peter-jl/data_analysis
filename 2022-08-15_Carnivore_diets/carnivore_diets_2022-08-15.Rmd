@@ -1,0 +1,242 @@
+---
+title: "Carnivore diets"
+author: "Peter-JL"
+date: "2022-08-15"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(widyr)
+library(tidytext)
+theme_set(theme_light())
+
+#data from github: 
+#https://github.com/osmiddleton/CarniDIET-Database
+#https://onlinelibrary.wiley.com/doi/10.1111/geb.13296
+carnivore_diets_raw <- read_csv("https://raw.githubusercontent.com/osmiddleton/CarniDIET-Database/master/Version%201.0/CarniDIET%201.0.csv")
+
+#data cleaning
+carnivore_diets <- carnivore_diets_raw %>% 
+  rename(carnivore = commonNameCarni,
+         prey = commonNamePrey) %>% 
+  mutate(prey = ifelse(str_detect(prey, "Snowshoe"), "Snowshoe hare", prey)) #get rid of weird character, "Snowshoe hare\xe1"
+#note: should filter for taxonRankPrey=="Species"
+```
+
+
+Can I just use common name? one to one correspondence between scientific and common name?
+```{r}
+
+carnivore_diets %>% 
+  distinct(scientificNameCarni, carnivore) %>% 
+  count(scientificNameCarni, sort=TRUE)
+
+```
+
+each scientific name corresponds to only one common name, will just use common name. Also there's 103 carnivore species in this data set.
+
+
+Break down of carnivores, limit to  top 50
+
+```{r}
+carnivore_diets %>% 
+  filter(taxonRankPrey=="Species",
+         fct_lump(carnivore, 50)!="Other") %>% 
+  count(carnivore, familyCarni, sort = TRUE) %>% 
+  mutate(carnivore = fct_reorder(carnivore, n)) %>% 
+  ggplot(aes(n, carnivore, colour = familyCarni)) +
+  geom_point() +
+  scale_x_log10() +
+  labs(x="# of prey species consumed (log)",
+       y="",
+       title = "Carnivores with the most diverse diets")
+```
+
+
+Same data but different graph, organized by family of carnivore
+
+```{r}
+carnivore_diets %>% 
+  filter(taxonRankPrey=="Species",
+         fct_lump(carnivore, 50)!="Other") %>% 
+  count(carnivore, familyCarni, sort = TRUE) %>% 
+  mutate(carnivore = reorder_within(carnivore, n, familyCarni),
+         familyCarni=fct_lump(familyCarni, 3),
+         familyCarni = fct_reorder(familyCarni, -n, sum)) %>% 
+  ggplot(aes(n, carnivore, colour = familyCarni)) +
+  geom_point() +
+  #scale_x_log10() +
+  scale_y_reordered() +
+  facet_wrap(~familyCarni, scales = "free") +
+  labs(x="# of prey species consumed (log)",
+       y="",
+       title = "Carnivores with the most diverse diets")
+```
+
+
+How many prey do carnivores eat, distribution?
+
+```{r}
+carnivore_diets %>% 
+  filter(taxonRankPrey=="Species") %>% 
+  count(carnivore) %>% 
+  ggplot(aes(n)) +
+  geom_histogram() +
+  scale_x_log10() +
+  labs(x="# distinct species eaten by carnivores (log)")
+```
+
+one carnivore eats over 4,000 distinct types of prey?
+
+```{r}
+carnivore_diets %>% 
+  filter(taxonRankPrey=="Species") %>% 
+  count(carnivore, sort=TRUE)
+```
+
+The Red fox eats 4,335 different types of prey.
+
+
+Break down of prey, limit to top 50
+
+```{r}
+carnivore_diets %>% 
+  filter(taxonRankPrey=="Species", #limit to species
+         fct_lump(prey, 50)!="Other") %>% 
+  count(prey, sort=TRUE) %>% 
+  mutate(prey = fct_reorder(prey, n)) %>% 
+  ggplot(aes(n, prey)) +
+  geom_point() +
+  #scale_x_log10() +
+  labs(x="# of carnivores who consume this prey",
+       title = "Most common prey species")
+```
+
+There seems to be carnivores who are also prey
+
+```{r}
+carnivore_diets %>% 
+  pivot_longer(c(carnivore,prey), names_to="type", values_to="species") %>% 
+  distinct(type, species) %>% 
+  count(species, sort=TRUE) %>% 
+  filter(n==2)
+```
+
+There are 55 species who are both carnivores and prey, e.g., American badger, American marten... and Brown Bear?
+
+
+Maybe Prey species is too vague, maybe familyPrey is a better variable to use (more consistency in naming, as opposed to 0.1-0.3kg rodent which might also be named 0.3-0.5 kg rodent).
+
+```{r}
+carnivore_diets %>% 
+  filter(fct_lump(familyPrey, 50)!="Other") %>% 
+  distinct(carnivore, familyPrey, .keep_all = TRUE) %>% 
+  count(familyPrey, sort=TRUE) %>% 
+  mutate(familyPrey = fct_reorder(familyPrey, n)) %>% 
+  ggplot(aes(n, familyPrey)) +
+  geom_point() +
+  scale_x_log10() +
+  labs(x="# of carnivores who consume this family of prey (log)",
+       title = "Most common prey families")
+```
+
+
+Which prey are most often eaten by the same predator?
+
+```{r}
+carnivore_diets %>% 
+  filter(taxonRankPrey=="Species") %>% 
+  count(carnivore, prey, sort=TRUE) %>% 
+  add_count(prey) %>% 
+  filter(nn>4) %>% 
+  pairwise_cor(prey, carnivore, n, sort=TRUE)
+```
+
+
+
+How about family of prey?
+
+```{r}
+carnivore_diets %>% 
+  filter(!is.na(familyPrey)) %>% 
+  count(carnivore, familyPrey, sort=TRUE) %>% 
+  filter(n>100) %>% 
+  pairwise_cor(familyPrey, carnivore, n, sort=TRUE)
+```
+
+
+
+SVD, which prey are best able to distinguish predators?
+
+```{r}
+prey_svd <- carnivore_diets %>% 
+  filter(taxonRankPrey=="Species", 
+         !is.na(prey)) %>% 
+  count(carnivore, prey, sort=TRUE) %>% 
+  mutate(value=1) %>% 
+  widely_svd(prey, carnivore, n)
+prey_svd %>% 
+  filter(between(dimension, 2, 5)) %>% 
+  group_by(dimension) %>% 
+  top_n(abs(value), n=10) %>% 
+  ungroup() %>% 
+  mutate(prey = reorder_within(prey, value, dimension)) %>% 
+  ggplot(aes(value, prey, fill=value>0)) +
+  geom_col() +
+  scale_y_reordered() +
+  facet_wrap(~dimension, scales = "free_y")
+```
+
+* 1st sv = small vs large animals
+* 2nd sv = sambar & chital are indian deer, langur is indian monkey vs prey in the americas
+
+
+
+
+What countries are there?
+
+```{r}
+carnivore_diets %>% 
+  count(country, sort=TRUE)
+```
+
+which country has the most carnivore species?
+
+```{r}
+carnivore_diets %>% 
+  distinct(carnivore, .keep_all=TRUE) %>% 
+  count(country, sort=TRUE)
+```
+
+This might be a US-centric data set.
+
+
+
+
+
+
+
+aggregate by carnivore, limit to carnivores with at least 5 distinct prey?
+
+```{r}
+carnivore_diets %>% 
+  group_by(carnivore) %>% 
+  summarize(ncountries = n_distinct(country, na.rm=TRUE),
+            nprey = n_distinct(prey, na.rm=TRUE),
+            lat = mean(decimalLatitude, na.rm = TRUE),
+            long = mean(decimalLongitude, na.rm = TRUE), 
+            pct_birds = mean(prey=="Birds", na.rm=TRUE),
+            pct_fish = mean(prey=="Fish", na.rm=TRUE),
+            pct_plants_seeds = mean(prey %in% c("Plant material", "Fruit/seeds"), na.rm=TRUE),
+            pct_food_mammal = mean(foodType=="Mammal", na.rm=TRUE),
+            pct_food_bird = mean(foodType=="Bird", na.rm=TRUE),
+            pct_plants = mean(foodType=="Plant", na.rm=TRUE))
+
+```
+
+
