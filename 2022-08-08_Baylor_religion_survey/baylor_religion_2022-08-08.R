@@ -25,7 +25,9 @@ religion_0 <- Hmisc::spss.get("2022-08-08_Baylor_religion_survey/data/Baylor Rel
   as_tibble()
 religion_1 <- Hmisc::spss.get("2022-08-08_Baylor_religion_survey/data/Baylor Religion Survey, Wave V (2017).SAV") %>% 
   janitor::clean_names() %>% 
-  as_tibble()
+  as_tibble() %>% 
+  mutate(h5a_num=as.numeric(h5a) - 1, .after=h5a) %>%  #factor levels from 1-11, but scale goes from 0-10
+  mutate(h6_hr_num=as.numeric(as.character(h6_hr)), .after=h6_hr)
 
 
 #view variable labels, religion0
@@ -199,7 +201,45 @@ design2017 <- svydesign(
 #whoohooo!
 svytable(~q1, design=design2017) %>% 
   as.data.frame.table() %>% 
-  arrange(desc(Freq))
+  arrange(desc(Freq)) 
 
-svytable(~r22, design2017) %>% sum()
+#how certain get into heaven?
+svytable(~r22, design2017, round=TRUE) %>% 
+  as.data.frame.table() %>% 
+  mutate(prop=Freq/sum(Freq))
+#https://www.thearda.com/data-archive?fid=BRS5&tab=2 
+#same numbers! But missing not shown
+
+#compare with regular count
+religion_1 %>% 
+  count(r22)
+
+svytable(~r22, design2017, round=TRUE, Ntotal=100) %>%
+  as.data.frame.table() 
+
+#political affiliation
+svytable(~q32, design2017, round=TRUE) %>% 
+  as.data.frame.table()
+
+
+#NUMERIC
+#health out of 10, current
+svytable(~h5a, design2017, round=TRUE) %>% 
+  as.data.frame.table()
+
+#cant compute mean prob cuz this is a factor
+svymean(~h5a_num, design2017, na.rm=TRUE)
+#whoohooo!
+
+#maybe bc there were na?
+svymean(~h5a, design2017, na.rm=TRUE)
+#not sure what this is doing
+
+
+#h6hr, during past month, how many hours of sleep?
+svymean(~h6_hr_num, design2017, na.rm=TRUE)
+svyvar(~h6_hr_num, design2017, na.rm=TRUE)
+sqrt(19.126)
+#matches website, woohoo!
+
 
