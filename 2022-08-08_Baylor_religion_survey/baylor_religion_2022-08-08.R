@@ -13,9 +13,12 @@
 
 library(tidyverse)
 library(readxl)
+library(survey)
 theme_set(theme_light())
 
 
+
+# read in data, view variables and labels ---------------------------------
 
 religion_0 <- Hmisc::spss.get("2022-08-08_Baylor_religion_survey/data/Baylor Religion Survey, Wave I (2005).SAV") %>% 
   janitor::clean_names() %>% 
@@ -24,6 +27,41 @@ religion_1 <- Hmisc::spss.get("2022-08-08_Baylor_religion_survey/data/Baylor Rel
   janitor::clean_names() %>% 
   as_tibble()
 
+
+#view variable labels, religion0
+religion_0_labels <- haven::read_sav("2022-08-08_Baylor_religion_survey/data/Baylor Religion Survey, Wave I (2005).SAV")
+religion_0_labels %>% 
+  map_chr(attr, "label") %>% 
+  enframe() %>% 
+  View("variables0")
+religion_0_labels %>% 
+  map(attr, "labels") %>% 
+  compact() %>% 
+  map_df(~data.frame(labels=names(.x),
+                     values=as.character(.x)), .id="name") %>% 
+  View("values0")
+
+#view variable labels, religion1
+religion_1_labels <- haven::read_sav("2022-08-08_Baylor_religion_survey/data/Baylor Religion Survey, Wave V (2017).SAV")
+religion_1_variables <- religion_1_labels %>% 
+  map_chr(attr, "label") %>% 
+  enframe() %>% 
+  mutate(col=row_number(),
+         var = names(religion_1), .before=name)
+religion_1_variables%>% 
+  View("variables1")
+religion_1_labels %>% 
+  map(attr, "labels") %>% 
+  compact() %>% 
+  map_df(~data.frame(labels=names(.x),
+                     values=as.character(.x)), .id="name") %>% 
+  left_join(religion_1_variables, by="name") %>% 
+  View("values1")
+
+
+
+# finding variables that match and combining datasets ---------------------
+
 var_labels_2004 <- map_chr(religion_0, Hmisc::label)
 #write_csv(var_labels2, file = "2022-08-08_Baylor_religion_survey/data/varnames_to_recode.csv")
 #write names to an excel file, useful for consulting during analysis
@@ -31,33 +69,25 @@ var_labels_2017 <- map_chr(religion_1, Hmisc::label)
 
 
 #matching variable labels in 2004 and 2017 data using stringdist
-distmat <- stringdist::stringdistmatrix(var_labels_2004, var_labels_2017)
-closest_matches <- distmat %>% 
-  as_tibble() %>% 
-  select(where(~between(min(.x), 50,60))) %>% #can change this cutoff
-  map_dbl(~which.min(.x))
-tibble(col_2004=closest_matches,
-       name_2004=names(religion_0[closest_matches]),
-       lab_2004=var_labels_2004[closest_matches],
-       col_2017=names(closest_matches) %>% str_remove("V") %>% as.numeric()) %>% 
-  mutate(name_2017=names(religion_1[col_2017]),
-         lab_2017=var_labels_2017[col_2017]) %>% 
-  View()
+view_similar <- function(df1=religion_0, df2=religion_1, distmat, lcut=50, hcut=60){
+  var_labels1 <- map_chr(df1, Hmisc::label)
+  var_labels2 <- map_chr(df2, Hmisc::label)
+  distmat <- stringdist::stringdistmatrix(var_labels1, var_labels2)
+  closest_matches <- distmat %>% 
+    as_tibble() %>% 
+    select(where(~between(min(.x), lcut,hcut))) %>% #can change this cutoff
+    map_dbl(~which.min(.x))
+  tibble(col_1=closest_matches,
+         name_1=names(df1[closest_matches]),
+         lab_1=var_labels1[closest_matches],
+         col_2=names(closest_matches) %>% str_remove("V") %>% as.numeric()) %>% 
+    mutate(name_2=names(df2[col_2]),
+           lab_2=var_labels2[col_2]) %>% 
+    View()
+}
 
-distmat <- stringdist::stringdistmatrix(var_labels_2017, var_labels_2004)
-closest_matches <- distmat %>% 
-  as_tibble() %>% 
-  select(where(~between(min(.x), 50,60))) %>% #can change this cutoff
-  map_dbl(~which.min(.x))
-tibble(col_2004=names(closest_matches) %>% str_remove("V") %>% as.numeric(),
-       col_2017=closest_matches,
-       name_2017=names(religion_1[closest_matches]),
-       lab_2017=var_labels_2017[closest_matches]) %>% 
-  mutate(name_2004=names(religion_0[col_2004]),
-         lab_2004=var_labels_2004[col_2004], 
-         .after=col_2004
-         ) %>% 
-  View()
+view_similar(religion_0, religion_1, 10, 20)
+view_similar(religion_1, religion_0, 10, 20)
 
 
 
@@ -89,8 +119,9 @@ tibble(
   labs2004=var_labels_2004[vars_2004],
   labs2017=var_labels_2017[vars_2017]
 ) %>% View()
+#39 variables that pretty closely matched
 
-###########
+
 
 #combine datasets with common variables
 religion_0_renamed <- religion_0 %>% 
@@ -102,7 +133,11 @@ religion_1_renamed <- religion_1 %>%
   set_names(new_var_names) %>% 
   mutate(year="y2017")
 
-#full dataset
+
+
+# full dataset, unweighted analysis ---------------------------------------
+
+
 religion_full <- rbind(religion_0_renamed, 
                        religion_1_renamed) %>% 
   mutate(religion_tradition=fct_collapse(religion_tradition,
@@ -115,10 +150,22 @@ religion_full <- rbind(religion_0_renamed,
                               human_error=c("The Bible contains some human error"), 
                               book_of_history_legends=c("The Bible is an ancient book of history and legends"),
                               dont_know=c("I don't know")
-                              ))
+                              ),
+    belief_God=fct_collapse(belief_God,
+                            no_opinion=c("I have no opinion","I don't know and there is no way to find out"),
+                            do_not_believe=c("I do not believe in God - Skip to Question 21", "I don't believe in anything beyond the physical world"),
+                            higher_power=c("I believe in a higher power or cosmic force"),
+                            yes_sometimes=c("I believe in God, but with some doubts","I sometimes believe in God"),
+                            yes_no_doubts=c("I have no doubst that God exists","I have no doubts that God exists")))
+
+# full dataset, unweighted analysis ---------------------------------------
 
 
-###############
+# full dataset, unweighted analysis ---------------------------------------
+
+
+religion_full %>% pull(belief_God) %>% unique()
+
 
 
 religion_full %>% 
@@ -135,4 +182,24 @@ religion_full %>%
   filter(!is.na(belief_God)) %>% 
   ggplot(aes(year, fill=belief_God)) +
   geom_bar(position="fill")
+
+
+
+
+# using survey package for weighted analyses ####
+
+#using 2017 dataset
+design2017 <- svydesign(
+  ids = ~1, #formula indicating there are no clusters
+  data=religion_1,
+  strata = NULL,
+  weights= ~weight
+  )
+
+#whoohooo!
+svytable(~q1, design=design2017) %>% 
+  as.data.frame.table() %>% 
+  arrange(desc(Freq))
+
+svytable(~r22, design2017) %>% sum()
 
