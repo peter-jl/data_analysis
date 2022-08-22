@@ -35,6 +35,7 @@ religion_0_labels <- haven::read_sav("2022-08-08_Baylor_religion_survey/data/Bay
 religion_0_labels %>% 
   map_chr(attr, "label") %>% 
   enframe() %>% 
+  mutate(name = janitor::make_clean_names(name)) %>% 
   View("variables0")
 religion_0_labels %>% 
   map(attr, "labels") %>% 
@@ -42,6 +43,18 @@ religion_0_labels %>%
   map_df(~data.frame(labels=names(.x),
                      values=as.character(.x)), .id="name") %>% 
   View("values0")
+
+religion_0_labels %>% 
+  map(attr, "labels") %>% 
+  compact() %>% 
+  enframe() %>% 
+  rownames_to_column("col") %>% 
+  mutate(name=janitor::make_clean_names(name),
+         labels=map(value, ~names(.x))) %>% 
+  unnest(c(value, labels)) %>% 
+  View("labels")
+  
+
 
 #view variable labels, religion1
 religion_1_labels <- haven::read_sav("2022-08-08_Baylor_religion_survey/data/Baylor Religion Survey, Wave V (2017).SAV")
@@ -241,5 +254,6 @@ svymean(~h6_hr_num, design2017, na.rm=TRUE)
 svyvar(~h6_hr_num, design2017, na.rm=TRUE)
 sqrt(19.126)
 #matches website, woohoo!
+
 
 
