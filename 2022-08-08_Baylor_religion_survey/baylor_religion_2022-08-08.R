@@ -35,6 +35,7 @@ religion_0_labels <- haven::read_sav("2022-08-08_Baylor_religion_survey/data/Bay
 religion_0_labels %>% 
   map_chr(attr, "label") %>% 
   enframe() %>% 
+  rownames_to_column("col") %>% 
   mutate(name = janitor::make_clean_names(name)) %>% 
   View("variables0")
 religion_0_labels %>% 
@@ -52,7 +53,7 @@ religion_0_labels %>%
   mutate(name=janitor::make_clean_names(name),
          labels=map(value, ~names(.x))) %>% 
   unnest(c(value, labels)) %>% 
-  View("labels")
+  View("values0")
   
 
 
