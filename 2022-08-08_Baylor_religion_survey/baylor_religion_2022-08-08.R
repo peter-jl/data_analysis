@@ -421,3 +421,35 @@ religion_1 %>%
 
 
 
+
+# polytomous logistic regression ------------------------------------------
+
+#predicting:
+#mp6 - who did you want to win the 2016 election: hilary, trump, other
+#mp7 - who did you vote for in 2016: hilary, trump, other, did not vote
+
+#covariates:
+#q31: how describe self politically? extremely conservative = 1, extremely liberal = 7
+#q32: think of self as repub, dem, or independent? strong repub = 1, strong dem = 7
+#q45: how happy are you with your life these days? not too happy=1, pretty happy = 2, very happy=3
+#l6a: in terms of having money, education, good job, how compare with other americans? 0=worst off, 10=best off
+#l7a: estimate social class. 1=lower class, 5=upper class
+#t4_1d: how often visit internet to share political opinions? never=0, several times per day =4
+#q77: gender. male=1, female=2, other=3
+#q80: where live? large city=1, rural area=4, don't know =8
+#d8: hispanic? 0=don't know, 1=yes, 2=no
+#d7_1: race? check all that apply. 1=white
+#d7_2: 2=black, 
+#d7_3: 3=asian, 
+#d7_4: 4=amerindian alaska native, 
+#d7_5: 5=native hawaiian/pacific islander
+#race: 1=white, 2=black, 3=asian, 4=amerindian, 5=pacific islander, 6=multiple races chosen, 7=no races chosen
+#d11: highest level of school? 1=8th grade or less, 9=postgrad, inc MA, MS, PhD, MD, JD
+#q95: household income? 1=$10k or less, 7=150,001 or more
+#reltrad: religious tradition? 1=evangelical protestant, 2=mainline prot, 3=black prot, 4=catholic, 5=jewish, 6=other, 7=no religion
+#q26: politics and morality? 1=do what makes you feel happy, 2=do what would help get ahead, 3=follow advice of authority, 4=follow God/scripture
+#
+
+#svy ordinal logistic regression (proportional odds and others)
+?svyolr #has method argument, based on MASS::polr()
+?svyglm
