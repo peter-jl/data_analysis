@@ -63,7 +63,7 @@ religion_1_variables <- religion_1_labels %>%
   map_chr(attr, "label") %>% 
   enframe() %>% 
   mutate(col=row_number(),
-         var = names(religion_1), .before=name)
+         name=tolower(name))
 religion_1_variables%>% 
   View("variables1")
 religion_1_labels %>% 
@@ -71,6 +71,7 @@ religion_1_labels %>%
   compact() %>% 
   map_df(~data.frame(labels=names(.x),
                      values=as.character(.x)), .id="name") %>% 
+  mutate(name=tolower(name)) %>% 
   left_join(religion_1_variables, by="name") %>% 
   View("values1")
 
@@ -255,6 +256,168 @@ svymean(~h6_hr_num, design2017, na.rm=TRUE)
 svyvar(~h6_hr_num, design2017, na.rm=TRUE)
 sqrt(19.126)
 #matches website, woohoo!
+
+
+
+# modelling matched pair categorical data ---------------------------------
+
+
+#is there a relation between rating for the 2 questions:
+#police shoot blacks more often because they are more violent
+#refugees from the middle east pose a terror threat
+tab_minorities <- religion_1 %>% 
+  select(black=mp4i,
+         mideast=mp4j) %>% 
+  xtabs(~black + mideast, data=.)
+
+tab_minorities %>% 
+  addmargins()
+
+#test marginal homogeneity, fit symmetry and quasi-symmetry models
+library(gnm)
+library(vcd)
+library(vcdExtra)
+
+(df_minorities <- tab_minorities %>% 
+  as.data.frame.table() %>% 
+  mutate(o_black = as.numeric(black),
+         o_mideast = as.numeric(mideast)) %>% 
+  as_tibble())
+
+#police shoot blacks more often because they are more violent
+#refugees from the middle east pose a terror threat
+df_minorities %>% 
+  pivot_longer(black:mideast, names_to="question", values_to = "agreement") %>% 
+  mutate(agreement=fct_rev(agreement),
+         question=fct_rev(question)) %>% 
+  ggplot(aes(Freq, question, fill=agreement)) +
+  geom_col(width=0.5, position="fill") +
+  scale_fill_brewer() +
+  theme(legend.position = "top") +
+  guides(fill=guide_legend(reverse = TRUE)) +
+  scale_x_continuous(labels=scales::percent) +
+  labs(fill="",
+       x="percent",
+       title="More people agree with the mideast question?",
+       subtitle="black: Police officers in the United States shoot blacks more often because they are more violent than whites\nmideast: Refugees from the Middle East pose a terrorist threat to the United States")
+  
+  
+mod_minority_symm <-  glm(Freq ~ Symm(black, mideast), data=df_minorities, family=poisson)
+mod_minority_qsymm <- update(mod_minority_symm, . ~ black + mideast + .)
+mod_minority_ordqsymm <-  glm(Freq ~ o_black + o_mideast + Symm(o_black, o_mideast), data=df_minorities, family=poisson)
+
+#test of marginal homogeneity
+anova(mod_minority_symm, mod_minority_qsymm, mod_minority_ordqsymm, test="Chisq")
+#chisq (3) = 61.98, p < .0001
+
+coin::mh_test(tab_minorities)
+#chisq (3) = 59.861, p < .001
+#agrees with the above LR test
+#there's a significant difference, suggesting marginal heterogeneity
+
+df_minorities %>% 
+  summarize(mn_black = sum(o_black*Freq)/sum(Freq),
+            mn_mideast = sum(o_mideast*Freq)/sum(Freq))
+#the mean for black is 2.02, very close to disagree
+#the mean for mideast is 2.23, significantly closer to agree compared to q1 (though still closest to disagree)
+
+LRstats(mod_minority_symm, mod_minority_qsymm, mod_minority_ordqsymm)
+
+label_args <- list(abbreviate_labs=TRUE)
+mosaic(mod_minority_symm, ~black + mideast,
+       gp=shading_Friendly2,
+       labeling=labeling_residuals,
+       labeling_args=label_args)
+mosaic(mod_minority_qsymm, ~black + mideast,
+       gp=shading_Friendly2,
+       labeling_args=label_args)
+mosaic(mod_minority_ordqsymm, ~black + mideast,
+       gp=shading_Friendly2,
+       labeling_args=label_args)
+
+#both the quasi-symmetry and ordinal quasi-symmetry fit well, the ordinal model
+#doesn't fit significantly better so adopt the simpler quasi-symmetry model
+
+#this suggests that allowing for the (small but) significant difference in marginal
+#proportions, departures from independence are symmetrical. 
+#We can see the the opposite residuals from the symmetry model have the same magnitude but opposite direction.
+#(Is this generally true when quasi-symmetry holds)?
+
+
+#we can also fit the linear-linear model, aka uniform association model
+mod_minority_UA <- glm(Freq ~ black + mideast + o_black*o_mideast, data=df_minorities, family=poisson)
+mod_minority_UA_diag <- update(mod_minority_UA, . ~ . + Diag(black, mideast))
+
+LRstats(mod_minority_UA, mod_minority_UA_diag)
+#these don't fit as well as the quasi-symmetry models above
+
+#we can also fit the crossings model, which suggests there are different
+#difficulty thresholds for crossing between categories, such that the higher the
+#threshold the lower the associations involved for these categories
+mod_minority_crossing <- glm(Freq ~ black + mideast + Crossings(black, mideast), data=df_minorities, family=poisson)
+mod_minority_crossing_diag <- update(mod_minority_crossing, . ~ . + Diag(black, mideast))
+
+LRstats(mod_minority_crossing, mod_minority_crossing_diag)
+#again these models don't fit as well as the quasi-symmetry models above
+
+model_list <- glmlist(mod_minority_symm, mod_minority_qsymm, mod_minority_ordqsymm, 
+                      mod_minority_UA, mod_minority_UA_diag,
+                      mod_minority_crossing, mod_minority_crossing_diag)
+(sumry <- LRstats(model_list, sortby="BIC"))
+sumry %>% 
+  as.data.frame() %>% 
+  rownames_to_column("model") %>% 
+  ggplot(aes(Df, BIC)) +
+  geom_point() +
+  geom_text(aes(label=model), nudge_y=4) +
+  expand_limits(x=c(2,9)) +
+  labs(title="quasi-symmetry models fit best")
+
+
+
+religion_1 %>% 
+  select(black=mp4i,
+         mideast=mp4j,
+         political=q31) %>% 
+  na.omit() %>% 
+  add_count(political, name="npolgroup") %>% 
+  count(political, npolgroup, black, mideast) %>%
+  mutate(political = str_c(political, npolgroup, sep=" n="),
+         political = factor(political) %>% fct_inorder()) %>% 
+  map_df(haven::zap_label) %>% 
+  pivot_longer(black:mideast, names_to="question", values_to = "agreement") %>% 
+  na.omit() %>% 
+  mutate(agreement=fct_rev(agreement),
+         question=fct_rev(question)) %>% 
+  ggplot(aes(n, question, fill=agreement)) +
+  geom_col(width=0.5, position="fill") +
+  facet_wrap(~political, ncol=1) +
+  scale_fill_brewer() +
+  ggthemes::theme_tufte() +
+  theme(legend.position = "top",
+        strip.text = element_text(hjust = 0)) +
+  guides(fill=guide_legend(reverse = TRUE)) +
+  scale_x_continuous(labels=scales::percent) +
+  labs(fill="",
+       x="percent",
+       title="More people agree with the mideast question? Perhaps driven by the 309 conservatives (the other large groups, i.e., moderates and liberals, don't show big differences between the 2 questions)",
+       subtitle="black: Police officers in the United States shoot blacks more often because they are more violent than whites\nmideast: Refugees from the Middle East pose a terrorist threat to the United States")
+  
+religion_1 %>% 
+  select(black=mp4i,
+         mideast=mp4j,
+         political=q31) %>% 
+  count(political, black, mideast) %>% 
+  map_df(haven::zap_label) %>% 
+  pivot_longer(black:mideast, names_to="question", values_to = "agreement") %>% 
+  na.omit() %>% 
+  xtabs(n~political+question+agreement, data=.) %>% 
+  ftable() %>% 
+  as.matrix() %>% doubledecker(labeling_args=list(abbreviate_labs=FALSE,
+                                                  rot_labels=c(bottom=90),
+                                                  pos_labels="center"),
+                               margins=c(left=0.5, right=7))
+  
 
 
 
