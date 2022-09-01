@@ -1,0 +1,62 @@
+---
+title: "UN Energy"
+author: "Peter-JL"
+date: "2022-09-01"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rvest)
+theme_set(theme_light(base_size=14))
+
+wiki_countries <- read_html("https://en.wikipedia.org/wiki/List_of_countries_by_United_Nations_geoscheme") %>% 
+  html_node(".wikitable") %>% 
+  html_table() %>% 
+  janitor::clean_names() %>% 
+  mutate(unsd_m49_codes = str_remove(unsd_m49_codes, "^.*\\}")) %>% 
+  #separate(unsd_m49_codes, c("cntry","subreg","reg","globe"), sep = " < ", fill="left", extra="merge") 
+  mutate(code=str_extract(unsd_m49_codes, "[\\d]{3}"),
+         code=as.numeric(code)) %>% 
+  select(-unsd_m49_codes)
+
+
+#https://data.un.org/
+Energy_raw <- read_csv("2022-09-01_UN_energy/data/SYB64_263_202110_Production, Trade and Supply of Energy.csv", skip=1, locale="UTF8")
+
+Energy <- Energy_raw %>% 
+  janitor::clean_names() %>% 
+  rename(region=2) %>% 
+  mutate(region=stringi::stri_trans_general(region, "Latin-ASCII")) %>%  #good enough fix for now
+  mutate(region_category=case_when(region_country_area %in% c(2,3,5,142,150,9)~"continent",
+                                   region_country_area %in% c(1) ~ "total",
+                                   TRUE ~ "country_territory"), .after=region_country_area) %>% 
+  left_join(wiki_countries, by=c("region_country_area"="code"))
+  
+
+Energy_wide <- Energy %>% 
+  pivot_wider(id_cols = c(region_country_area:year, region.y), names_from = series, values_from = value) %>% 
+  janitor::clean_names()
+
+Countries <- Energy_wide %>% 
+  filter(region_category=="country_territory") %>% 
+  rename(country=region_x,
+         continent=region_y)
+```
+
+## 
+
+```{r}
+Countries %>% 
+  add_count(country) %>% 
+  filter(n==8) %>% 
+  ggplot(aes(year, primary_energy_production_petajoules, group=country)) +
+  geom_line() +
+  scale_y_log10() +
+  facet_wrap(~continent)
+```
+
