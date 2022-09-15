@@ -26,7 +26,7 @@ wiki_countries <- read_html("https://en.wikipedia.org/wiki/List_of_countries_by_
 
 
 #https://data.un.org/
-Energy_raw <- read_csv("2022-09-01_UN_energy/data/SYB64_263_202110_Production, Trade and Supply of Energy.csv", skip=1, locale="UTF8")
+Energy_raw <- read_csv("2022-09-01_UN_energy/data/SYB64_263_202110_Production, Trade and Supply of Energy.csv", skip=1)
 
 Energy <- Energy_raw %>% 
   janitor::clean_names() %>% 
@@ -53,10 +53,14 @@ Countries <- Energy_wide %>%
 ```{r}
 Countries %>% 
   add_count(country) %>% 
-  filter(n==8) %>% 
+  filter(n==8, 
+         !is.na(continent)) %>%
   ggplot(aes(year, primary_energy_production_petajoules, group=country)) +
   geom_line() +
-  scale_y_log10() +
+  geom_text(aes(label=country, x=max(year)), check_overlap=TRUE) +
+  #scale_y_log10() +
   facet_wrap(~continent)
 ```
+
+
 
