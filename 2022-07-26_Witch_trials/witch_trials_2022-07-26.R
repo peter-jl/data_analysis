@@ -45,10 +45,10 @@ witch_trials %>%
   theme(legend.position = "top")
 
 
-
 library(gganimate) 
+library(gifski)
 
-witch_trials %>% 
+anim1 <- witch_trials %>% 
   # mutate(decade = map(decade, ~seq(., 1850, by = 10))) %>% 
   # unnest(decade) %>% #don't need these 2 lines, just use cumulative=TRUE below
   ggplot(aes(lon, lat,colour=country)) +
@@ -57,10 +57,12 @@ witch_trials %>%
   ggthemes::theme_map() +
   theme(legend.position = "none") +
   transition_manual(decade, cumulative = TRUE) +
-  labs(title = "Witch trials in decade: { current_frame }")
+  labs(title = "Witch trials in decade: { current_frame }") 
+animate(anim1, renderer = gifski_renderer())
 #there's so many data points with lon and lat missing, probably better to do a choropleth instead
 
-witch_trials %>% 
+
+anim2 <- witch_trials %>% 
   filter(!is.na(deaths)) %>%
   #mutate(decade = map(decade, ~seq(., 1850, by = 10))) %>% 
   #unnest(decade) %>% 
@@ -71,7 +73,7 @@ witch_trials %>%
   theme(legend.position = "none") +
   transition_manual(decade) +
   labs(title = "Witch trials in decade: { current_frame }")
-
+animate(anim2, renderer = gifski_renderer())
 
 
 #heatmap
@@ -86,7 +88,7 @@ witch_trials %>%
   scale_fill_continuous(trans="log10", labels = comma) +
   labs(x = "Century",
        y = "Country",
-       title = 'Number of alleged "witches" tried by country and century')
+       title = 'Number of alleged witches tried by country and century')
 #UK has many cases that don't appear in the above map
 
 by_country <- witch_trials %>% 
@@ -248,6 +250,7 @@ witch_trials %>%
   arrange(desc(trials))
 
 witch_trials %>% 
+  #filter top 9 countries only
   filter(fct_lump(country, 9)!="Other") %>% 
   group_by(country, decade) %>% 
   summarise(num_trials = n(),
