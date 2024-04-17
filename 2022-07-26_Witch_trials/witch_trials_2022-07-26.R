@@ -13,13 +13,41 @@ witch_trials <- read_csv("https://raw.githubusercontent.com/JakeRuss/witch-trial
 witch_trials %>% 
   summary()
 
+#many records are missing the year of the trials whereas decade is present for
+#all records, so it's best to analyze these data at the level of decades.
+#all records have country, and 159 out of 10,940 records are missing region, so
+#there's possibility of regional analysis
 map_df(witch_trials, ~sum(is.na(.)))
+witch_trials |> map_int(\(col) sum(is.na(col))) |> bind_rows() #new syntax
 #931 missing year
 #3826 missing deaths
 #5213 missing city
 #1047 missing subregion
 #159 missing region
 #5803 missing lon and lat
+
+#for each country, what proportion of records have info about deaths?
+#France and UK relatively high, both ~75%, whereas Germany only 42%
+#Switzerland at 93%, potential for regional comparison of death rates?
+witch_trials |> 
+  group_by(country) |> 
+  summarise(deaths_valid = sum(!is.na(deaths)),
+            tried_valid = sum(!is.na(tried)),
+            prop_deaths_tried_valid = deaths_valid / tried_valid) |> 
+  ungroup() |> 
+  arrange(desc(tried_valid))
+
+witch_trials |> 
+  filter(country == "Switzerland", 
+         !is.na(deaths),
+         !is.na(region)) |> 
+  group_by(region) |> 
+  summarise(tot_tried = sum(tried),
+            tot_death = sum(deaths),
+            prop_death = tot_death / tot_tried) |> 
+  arrange(desc(prop_death)) |> 
+  print(n = 26)
+
 
 witch_trials %>% 
   count(decade, wt = tried, name = "tried") %>% 
@@ -29,7 +57,6 @@ witch_trials %>%
 witch_trials %>% 
   ggplot(aes(decade)) +
   geom_histogram(binwidth=10)
-
 
 witch_trials %>% 
   ggplot(aes(decade)) +
@@ -43,6 +70,10 @@ witch_trials %>%
   borders("world", regions = countries) +
   ggthemes::theme_map() +
   theme(legend.position = "top")
+
+#number of witches tried by country
+witch_trials |> 
+  count(country, wt = tried, sort = TRUE)
 
 
 library(gganimate) 
@@ -146,10 +177,12 @@ by_decade_country %>%
   facet_wrap(~ country)
 
 #witch trials contagion across countries?
+#i.e., order countries by the median decade of all decades in which they had witch trials
 library(ggridges)
 witch_trials %>% 
-  add_count(country) %>% 
-  filter(n > 25) %>% 
+  #only include countries with trials over 25 decades
+  #add_count(country) %>% 
+  #filter(n > 25) %>% 
   mutate(country = fct_reorder(country, decade, .desc = TRUE)) %>% 
   ggplot(aes(decade, country, fill = country)) +
   geom_density_ridges() +
