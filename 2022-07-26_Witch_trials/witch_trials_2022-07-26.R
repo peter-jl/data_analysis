@@ -37,6 +37,10 @@ witch_trials |>
   ungroup() |> 
   arrange(desc(tried_valid))
 
+#Switzerland has 93% valid death data to tried data ratio, good chance to look
+#into regional variation in % trials where witches were sentenced to death
+#Seems like Vaud had high % death, more western regions like Geneve, Neuchatel,
+#and Lucerne had low % death
 witch_trials |> 
   filter(country == "Switzerland", 
          !is.na(deaths),
@@ -47,6 +51,23 @@ witch_trials |>
             prop_death = tot_death / tot_tried) |> 
   arrange(desc(prop_death)) |> 
   print(n = 26)
+
+
+
+#which trials had the most individuals on trial?
+#looks like trials in Vaud in the 1600s had 500 on trial, but this looks like it
+#was for the entire decade of e.g., 1610, 1620, etc., not individual trials
+witch_trials |> 
+  slice_max(tried, n = 10)
+
+#how about looking at only records with a valid year?
+#this looks more interesting, but even so, are these individuals who were tried
+#in multiple trials over the year, or multiple individuals per trial?
+witch_trials |> 
+  filter(!is.na(year)) |> 
+  slice_max(tried, n = 10)
+
+
 
 
 witch_trials %>% 
