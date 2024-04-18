@@ -26,6 +26,19 @@ witch_trials |> map_int(\(col) sum(is.na(col))) |> bind_rows() #new syntax
 #159 missing region
 #5803 missing lon and lat
 
+
+
+
+#summarize overall number of witches tried, deaths
+#over 43,000 tried for witchcraft in europe, over 16,000 deaths
+#note that the sum of deaths is only for valid records, 3826 records are missing that info
+witch_trials |> 
+  summarise(tot_tried = sum(tried),
+            tot_deaths = sum(deaths, na.rm = TRUE))
+
+
+
+
 #for each country, what proportion of records have info about deaths?
 #France and UK relatively high, both ~75%, whereas Germany only 42%
 #Switzerland at 93%, potential for regional comparison of death rates?
@@ -69,7 +82,7 @@ witch_trials |>
 
 
 
-
+#basic line plot of number of witches tried over time
 witch_trials %>% 
   count(decade, wt = tried, name = "tried") %>% 
   ggplot(aes(decade, tried)) +
@@ -83,14 +96,18 @@ witch_trials %>%
   ggplot(aes(decade)) +
   stat_ecdf()
 
+
+#breakdown by countries
 countries <- unique(witch_trials$country) %>% c("UK")
 
+#point map of witch trials
 witch_trials %>% 
-  ggplot(aes(lon, lat, colour=country)) +
-  geom_point() +
+  ggplot(aes(lon, lat, colour = country)) +
+  geom_point(alpha=.4, aes(size = tried)) +
   borders("world", regions = countries) +
   ggthemes::theme_map() +
-  theme(legend.position = "top")
+  theme(legend.position = "top") +
+  coord_equal()
 
 #number of witches tried by country
 witch_trials |> 
@@ -100,11 +117,12 @@ witch_trials |>
 library(gganimate) 
 library(gifski)
 
+#animated dot plot
 anim1 <- witch_trials %>% 
   # mutate(decade = map(decade, ~seq(., 1850, by = 10))) %>% 
   # unnest(decade) %>% #don't need these 2 lines, just use cumulative=TRUE below
   ggplot(aes(lon, lat,colour=country)) +
-  geom_point(alpha = .1) +
+  geom_point(alpha = .1, aes(size = tried)) +
   borders("world", regions = countries) +
   ggthemes::theme_map() +
   theme(legend.position = "none") +
@@ -118,17 +136,17 @@ anim2 <- witch_trials %>%
   filter(!is.na(deaths)) %>%
   #mutate(decade = map(decade, ~seq(., 1850, by = 10))) %>% 
   #unnest(decade) %>% 
-  ggplot(aes(lon, lat,colour=country, size = deaths)) +
+  ggplot(aes(lon, lat,colour=country, size = tried)) +
   geom_point() +
   borders("world", regions = countries) +
   ggthemes::theme_map() +
   theme(legend.position = "none") +
   transition_manual(decade) +
   labs(title = "Witch trials in decade: { current_frame }")
-animate(anim2, renderer = gifski_renderer())
+animate(anim2, fps = 5, renderer = gifski_renderer())
 
 
-#heatmap
+#heatmap of number tried by country and by century
 witch_trials %>% 
   #filter(!is.na(deaths)) %>% 
   #filter(deaths>0) %>% 
@@ -156,6 +174,9 @@ by_country <- witch_trials %>%
             tot_sources = n_distinct(record.source, na.rm = TRUE), 
             sources = paste(unique(record.source), collapse = ", "))
 
+#for countries with >100 deaths, show # of trials by country, with # tried as
+#size of circle, and death rate as shade
+#death rate is iffy, might be more likely to have recorded trials which result in death?
 by_country %>% 
   filter(n_death > 100) %>% 
   mutate(country = fct_reorder(country, trials)) %>% 
@@ -171,7 +192,7 @@ by_country %>%
        colour = "Death Rate",
        title = "Witch trials by country",
        subtitle = "Number tried only includes trials with death info")
-#death rate is iffy, might be more likely to have recorded trials which result in death?
+
 
 
 
@@ -189,13 +210,36 @@ by_decade_country <- witch_trials %>%
             sources = paste(unique(record.source), collapse = ", ")) %>% 
   ungroup()
 
+# No of people tried as witches overall, by country
+by_decade_country |> 
+  group_by(country) |> 
+  summarise(tot_tried = sum(tot_tried)) |> 
+  arrange(desc(tot_tried))
 
+#faceted line plots for each country
+#only top 9 countries in terms of number of people tried as witches
+#witch trials in Spain abruptly stopped around 1610 - why???
 by_decade_country %>% 
-  filter(fct_lump(country, 9, ties.method = "first")!="Other") %>% 
+  filter(fct_lump(country, 9, w = tot_tried, ties.method = "first")!="Other") %>% 
   mutate(country = fct_reorder(country, tot_tried, sum, .desc = TRUE)) %>% 
   ggplot(aes(decade, tot_tried, group = country)) +
   geom_line() +
   facet_wrap(~ country)
+
+#stacked area plot of top 5 countries + other
+#could arrange the countries better
+by_decade_country |> 
+  mutate(country = fct_lump(country, 5, w = tot_tried, ties.method = "first"),
+         country = fct_reorder(country, tot_tried, sum)) |> 
+  ggplot(aes(decade, tot_tried, fill = country)) +
+  geom_area()
+
+#filled area plot of top 5 countries + other
+by_decade_country |> 
+  mutate(country = fct_lump(country, 5, w = tot_tried, ties.method = "first"),
+         country = fct_reorder(country, tot_tried, sum)) |> 
+  ggplot(aes(decade, tot_tried, fill = country)) +
+  geom_area(position = "fill")
 
 #witch trials contagion across countries?
 #i.e., order countries by the median decade of all decades in which they had witch trials
