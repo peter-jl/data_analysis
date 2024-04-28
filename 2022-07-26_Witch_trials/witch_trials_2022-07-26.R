@@ -26,8 +26,6 @@ witch_trials |> map_int(\(col) sum(is.na(col))) |> bind_rows() #new syntax
 #159 missing region
 #5803 missing lon and lat
 
-#test
-
 
 #summarize overall number of witches tried, deaths
 #over 43,000 tried for witchcraft in europe, over 16,000 deaths
