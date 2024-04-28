@@ -26,7 +26,7 @@ witch_trials |> map_int(\(col) sum(is.na(col))) |> bind_rows() #new syntax
 #159 missing region
 #5803 missing lon and lat
 
-
+#test
 
 
 #summarize overall number of witches tried, deaths
